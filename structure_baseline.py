@@ -2,7 +2,6 @@ import csv
 import time
 import numpy as np
 import scipy.sparse as sp
-from sklearn.metrics import accuracy_score, log_loss
 
 import torch
 import torch.nn as nn
@@ -17,11 +16,19 @@ def load_data():
     _,graph_size = np.unique(graph_indicator, return_counts=True)
     
     edges = np.loadtxt("edgelist.txt", dtype=np.int64, delimiter=",")
+    edges_inv = np.vstack((edges[:,1], edges[:,0]))
+    edges = np.vstack((edges, edges_inv.T))
+    s = edges[:,0]*graph_indicator.size + edges[:,1]
+    idx_sort = np.argsort(s)
+    edges = edges[idx_sort,:]
+    edges,idx_unique =  np.unique(edges, axis=0, return_index=True)
     A = sp.csr_matrix((np.ones(edges.shape[0]), (edges[:,0], edges[:,1])), shape=(graph_indicator.size, graph_indicator.size))
-    A += A.T
     
     x = np.loadtxt("node_attributes.txt", delimiter=",")
     edge_attr = np.loadtxt("edge_attributes.txt", delimiter=",")
+    edge_attr = np.vstack((edge_attr,edge_attr))
+    edge_attr = edge_attr[idx_sort,:]
+    edge_attr = edge_attr[idx_unique,:]
     
     adj = []
     features = []
@@ -42,7 +49,7 @@ def normalize_adjacency(A):
     Function that normalizes an adjacency matrix
     """
     n = A.shape[0]
-    A = A + sp.identity(n)
+    A += sp.identity(n)
     degs = A.dot(np.ones(n))
     inv_degs = np.power(degs, -1)
     D = sp.diags(inv_degs)
@@ -102,7 +109,7 @@ class GNN(nn.Module):
         return F.log_softmax(out, dim=1)
 
 # Load graphs
-adj, features, edge_features = load_data() 
+adj, features, edge_features = load_data()
 
 # Normalize adjacency matrices
 adj = [normalize_adjacency(A) for A in adj]
